@@ -1,0 +1,8 @@
+[NETBOX]
+URL=<netboxurl>
+TAGNAME=automated
+
+[GIT]
+URL=<giturl without prefix>
+URLPREFIX=https://
+PATH=./configs/
