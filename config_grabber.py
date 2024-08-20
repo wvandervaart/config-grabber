@@ -3,6 +3,7 @@ import tkn
 import git
 import configparser
 import sys, getopt
+from datetime import datetime
 
 def read_config():
     config = configparser.ConfigParser()
@@ -50,7 +51,7 @@ def git_clone(cfg):
     return repo
 
 def git_add(repo, msg):
-    repo.git.add(update=True)
+    repo.git.add(all=True)
     repo.index.commit(msg)
 
 def git_push(repo):
@@ -58,25 +59,26 @@ def git_push(repo):
 
 def parse_opts(argv):
     try:
-        opts, args = getopt.getopt(argv,"ht:f:m:",["type=","filter=","message="])
+        opts, args = getopt.getopt(argv,"hm:",["message="])
     except getopt.GetoptError:
-        print ('config_grabber.py -t <filtertype [role,device,all]> -f <filter> -m <message>')
+        print ('config_grabber.py -m <message>')
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-h':
-            print ('config_grabber.py -t <filtertype> -f <filter>')
+            print ('config_grabber.py -m <message>')
             sys.exit()
-        elif opt in ("-t", "--type"):
-            t = arg
-        elif opt in ("-f", "--filter"):
-            f = arg
         elif opt in ("-m", "--message"):
             m = arg
 
-    return t, f, m
+    return m
 
 def main(argv):
-    t, f, m = parse_opts(argv)
+    t = "all"
+    f = "all"
+    m = parse_opts(argv)
+    now = datetime.now()
+    dt_string = now.strftime("%Y%m%d %H:%M:%S")
+    m = m + " " + dt_string
     cfg = read_config()
     nb = connect(cfg)
     repo = git_clone(cfg)
