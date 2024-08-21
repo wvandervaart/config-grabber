@@ -83,8 +83,12 @@ def main(argv):
     nb = connect(cfg)
     repo = git_clone(cfg)
     get_device_configs(cfg, nb, t, f)
-    git_add(repo, m)
-    git_push(repo)
+    if repo.is_dirty():
+        git_add(repo, m)
+        print(f"Pushing config with message: {m}")
+        git_push(repo)
+    else:
+        print("No changes found, no push needed.")
 
 if __name__ == "__main__":
     main(sys.argv[1:])
