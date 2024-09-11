@@ -17,7 +17,7 @@ def connect(cfg):
     return nb
 
 def get_device_configs(cfg, nb, t, f):
-    path = cfg.get('GIT','PATH')
+    path = cfg.get('GIT','PATH')+'configs/'
     if t == "role":
         devices = nb.dcim.devices.filter(role=f, tag=cfg.get('NETBOX','TAGNAME'))
     elif t == "device":
@@ -49,6 +49,11 @@ def git_clone(cfg):
         repo = git.Repo(path)
         repo.remotes.origin.pull()
     return repo
+def git_branch(repo, name):
+    repo.checkout(name)
+
+def git_main(repo):
+    repo.checkout("main")
 
 def git_add(repo, msg):
     repo.git.add(all=True)
@@ -82,6 +87,7 @@ def main(argv):
     cfg = read_config()
     nb = connect(cfg)
     repo = git_clone(cfg)
+    git_branch(repo, m)
     get_device_configs(cfg, nb, t, f)
     if repo.is_dirty():
         git_add(repo, m)
@@ -89,6 +95,7 @@ def main(argv):
         git_push(repo)
     else:
         print("No changes found, no push needed.")
+    git_main(repo)
 
 if __name__ == "__main__":
     main(sys.argv[1:])
