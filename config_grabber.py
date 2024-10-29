@@ -50,10 +50,10 @@ def git_clone(cfg):
         repo.remotes.origin.pull()
     return repo
 def git_branch(repo, name):
-    repo.checkout(name)
+    repo.git.checkout("HEAD", b=name)
 
 def git_main(repo):
-    repo.checkout("main")
+    repo.git.checkout("main")
 
 def git_add(repo, msg):
     repo.git.add(all=True)
@@ -83,11 +83,12 @@ def main(argv):
     m = parse_opts(argv)
     now = datetime.now()
     dt_string = now.strftime("%Y%m%d %H:%M:%S")
+    branch_name = m.replace(" ", "_") + "_" + now.strftime("%Y%m%d%H%M%S")
     m = m + " " + dt_string
     cfg = read_config()
     nb = connect(cfg)
     repo = git_clone(cfg)
-    git_branch(repo, m)
+    git_branch(repo, branch_name)
     get_device_configs(cfg, nb, t, f)
     if repo.is_dirty():
         git_add(repo, m)
