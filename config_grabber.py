@@ -25,7 +25,7 @@ def get_device_configs(cfg, nb, t, f):
     elif t == "all":
         devices = nb.dcim.devices.filter(tag=cfg.get('NETBOX','TAGNAME'))
     for device in devices:
-        print(device.name)
+        #print(device.name)
         config = device.render_config.create()
         f = open(path+device.name+".set", "w")
         f.write(config['content'])
