@@ -62,25 +62,10 @@ def git_add(repo, msg):
 def git_push(repo):
     repo.git.push()
 
-def parse_opts(argv):
-    try:
-        opts, args = getopt.getopt(argv,"hm:",["message="])
-    except getopt.GetoptError:
-        print ('config_grabber.py -m <message>')
-        sys.exit(2)
-    for opt, arg in opts:
-        if opt == '-h':
-            print ('config_grabber.py -m <message>')
-            sys.exit()
-        elif opt in ("-m", "--message"):
-            m = arg
-
-    return m
-
-def main(argv):
+def build(message):
     t = "all"
     f = "all"
-    m = parse_opts(argv)
+    m = message
     now = datetime.now()
     dt_string = now.strftime("%Y%m%d %H:%M:%S")
     branch_name = m.replace(" ", "_") + "_" + now.strftime("%Y%m%d%H%M%S")
@@ -97,6 +82,3 @@ def main(argv):
     else:
         print("No changes found, no push needed.")
     git_main(repo)
-
-if __name__ == "__main__":
-    main(sys.argv[1:])
