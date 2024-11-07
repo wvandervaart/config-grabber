@@ -79,6 +79,9 @@ def build(message):
         git_add(repo, m)
         print(f"Pushing config with message: {m}")
         git_push(repo)
+        returnmsg = f"Pushed with message: {m}"
     else:
         print("No changes found, no push needed.")
+        returnmsg = "No changes found, no push needed."
     git_main(repo)
+    return returnmsg
