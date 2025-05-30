@@ -4,10 +4,17 @@ import git
 import configparser
 import sys, getopt
 from datetime import datetime
+import asyncio
+
+def background(f):
+    def wrapped(*args, **kwargs):
+        return asyncio.get_event_loop().run_in_executor(None, f, *args, **kwargs)
+
+    return wrapped
 
 def read_config():
     config = configparser.ConfigParser()
-    config.read('.config')
+    config.read('/home/tools/scripts/config-grabber/.config')
     return config
 
 def connect(cfg): 
@@ -15,6 +22,14 @@ def connect(cfg):
 
     nb = pynetbox.api(url, tkn.get('nb'))
     return nb
+
+@background
+def grab_config(device, path):
+    print(device.name)
+    config = device.render_config.create()
+    f = open(path+device.name+".set", "w")
+    f.write(config['content'])
+    f.close()
 
 def get_device_configs(cfg, nb, t, f):
     path = cfg.get('GIT','PATH')+'configs/'
@@ -24,12 +39,12 @@ def get_device_configs(cfg, nb, t, f):
         devices = nb.dcim.devices.filter(name=f, tag=cfg.get('NETBOX','TAGNAME'))
     elif t == "all":
         devices = nb.dcim.devices.filter(tag=cfg.get('NETBOX','TAGNAME'))
+    loop = asyncio.get_event_loop()
     for device in devices:
-        #print(device.name)
-        config = device.render_config.create()
-        f = open(path+device.name+".set", "w")
-        f.write(config['content'])
-        f.close()
+        #print(device.name)asyncio.gather
+        looper = asyncio.gather(grab_config(device, path))
+    results = loop.run_until_complete(looper)
+    print(results)
 
 def is_git_repo(path):
     try:
@@ -49,6 +64,7 @@ def git_clone(cfg):
         repo = git.Repo(path)
         repo.remotes.origin.pull()
     return repo
+
 def git_branch(repo, name):
     repo.git.checkout("HEAD", b=name)
 
@@ -59,8 +75,8 @@ def git_add(repo, msg):
     repo.git.add(all=True)
     repo.index.commit(msg)
 
-def git_push(repo):
-    repo.git.push()
+def git_push(repo, branch_name):
+    repo.git.push('origin', '-u', branch_name)
 
 def build(message):
     t = "all"
@@ -78,7 +94,7 @@ def build(message):
     if repo.is_dirty():
         git_add(repo, m)
         print(f"Pushing config with message: {m}")
-        git_push(repo)
+        git_push(repo, branch_name)
         returnmsg = f"Pushed with message: {m}"
     else:
         print("No changes found, no push needed.")

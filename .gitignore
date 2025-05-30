@@ -2,3 +2,4 @@ configs
 venv
 __pycache__
 .config
+.token*
