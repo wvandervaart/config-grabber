@@ -25,11 +25,11 @@ def connect(cfg):
 
 @background
 def grab_config(device, path):
-    print(device.name)
     config = device.render_config.create()
     f = open(path+device.name+".set", "w")
     f.write(config['content'])
     f.close()
+    return device.name
 
 def get_device_configs(cfg, nb, t, f):
     path = cfg.get('GIT','PATH')+'configs/'
@@ -40,9 +40,7 @@ def get_device_configs(cfg, nb, t, f):
     elif t == "all":
         devices = nb.dcim.devices.filter(tag=cfg.get('NETBOX','TAGNAME'))
     loop = asyncio.get_event_loop()
-    for device in devices:
-        #print(device.name)asyncio.gather
-        looper = asyncio.gather(grab_config(device, path))
+    looper = asyncio.gather(*[grab_config(device, path) for device in devices])
     results = loop.run_until_complete(looper)
     print(results)
 
