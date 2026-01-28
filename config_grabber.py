@@ -14,7 +14,8 @@ def background(f):
 
 def read_config():
     config = configparser.ConfigParser()
-    config.read('/home/tools/scripts/config-grabber/.config')
+    #config.read('/home/tools/scripts/config-grabber/.config')
+    config.read('.config')
     return config
 
 def connect(cfg): 
@@ -89,7 +90,7 @@ def build(message):
     repo = git_clone(cfg)
     git_branch(repo, branch_name)
     get_device_configs(cfg, nb, t, f)
-    if repo.is_dirty():
+    if repo.is_dirty() or repo.untracked_files:
         git_add(repo, m)
         print(f"Pushing config with message: {m}")
         git_push(repo, branch_name)
@@ -98,4 +99,4 @@ def build(message):
         print("No changes found, no push needed.")
         returnmsg = "No changes found, no push needed."
     git_main(repo)
-    return returnmsg
+return returnmsg
