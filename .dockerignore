@@ -1,0 +1,9 @@
+venv
+__pycache__
+.pytest_cache
+.git
+.idea
+configs
+.token_*
+*.pyc
+test_config_grabber.py

@@ -1,0 +1,20 @@
+services:
+  config-grabber:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET}
+      NB_TOKEN: ${NB_TOKEN}
+      GIT_TOKEN: ${GIT_TOKEN}
+      GIT_USER_NAME: ${GIT_USER_NAME}
+      GIT_USER_EMAIL: ${GIT_USER_EMAIL}
+    volumes:
+      - ./.config:/app/.config:ro
+      - config-data:/app/configs
+      # Internal/private CA cert(s) for git.triplinq.net, if the git server's
+      # certificate isn't signed by a public CA. Drop .crt files in ./certs.
+      - ./certs:/usr/local/share/ca-certificates:ro
+
+volumes:
+  config-data:

@@ -1,38 +1,20 @@
 # -----------------------
-# this is another version that includes the is_insecure() function to check that the file is chmod 600.
+# Reads tokens from environment variables instead of ~/.token_<target> files.
 import os
 import sys
-import stat
-def is_insecure(filepath):
-    """Check if file is accessible by group or other."""
-    st = os.stat(filepath)
-    if st.st_mode & stat.S_IRGRP:
-        return True
-    if st.st_mode & stat.S_IWGRP:
-        return True
-    if st.st_mode & stat.S_IXGRP:
-        return True
-    if st.st_mode & stat.S_IROTH:
-        return True
-    if st.st_mode & stat.S_IWOTH:
-        return True
-    if st.st_mode & stat.S_IXOTH:
-        return True
-    return False
+
+ENV_VARS = {
+    "nb": "NB_TOKEN",
+    "git": "GIT_TOKEN",
+}
+
 
 def get(TARGET):
-    """Read token from ~/.token_TARGET."""
-    token_file = '{}/.token_{}'.format(os.environ['HOME'], TARGET)
-
-    if is_insecure(token_file):
-        print('Token file is insecure, please chmod 600 {}'.format(token_file))
-        print('EXITING')
+    """Read token from the environment variable mapped to TARGET."""
+    env_var = ENV_VARS.get(TARGET, "{}_TOKEN".format(TARGET.upper()))
+    token = os.environ.get(env_var)
+    if not token:
+        print("{} environment variable is not set.".format(env_var))
+        print("EXITING")
         sys.exit(1)
-    try:
-        with open(token_file) as f:
-            token = f.read().splitlines()
-            token = token[0].strip()
-    except IOError as e:
-        print("{} config file is missing or cannot be read.".format(TARGET))
-        token = None
     return token

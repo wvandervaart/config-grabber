@@ -1,0 +1,4 @@
+pynetbox>=7.0
+GitPython>=3.1
+Flask>=3.0
+gunicorn>=22.0

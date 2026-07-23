@@ -1,5 +1,8 @@
 configs
+configs/.*
 venv
 __pycache__
 .config
 .token*
+.idea
+.env

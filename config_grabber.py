@@ -2,9 +2,14 @@ import pynetbox
 import tkn
 import git
 import configparser
+import requests
 from datetime import datetime
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+
+# Matches ThreadPoolExecutor's default max_workers (min(32, cpu_count+4)) so
+# concurrent device fetches don't exceed the session's connection pool.
+POOL_MAXSIZE = 32
 
 def read_config():
     config = configparser.ConfigParser()
@@ -14,6 +19,9 @@ def read_config():
 def connect(cfg):
     url = cfg.get('NETBOX', 'URL')
     nb = pynetbox.api(url, tkn.get('nb'))
+    adapter = requests.adapters.HTTPAdapter(pool_maxsize=POOL_MAXSIZE)
+    nb.http_session.mount('https://', adapter)
+    nb.http_session.mount('http://', adapter)
     return nb
 
 async def grab_config(device, path, executor=None):
