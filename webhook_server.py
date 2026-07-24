@@ -6,6 +6,7 @@ from collections import OrderedDict
 from datetime import datetime, timezone
 from html import escape
 
+import requests
 from flask import Flask, Response, abort, jsonify, request
 
 import config_grabber
@@ -55,12 +56,27 @@ def _new_run(message):
     return run
 
 
-def _run_build(run, message):
+def _notify_slack_build_started(message, run_id, log_url):
+    """Best-effort notification; Slack being unreachable/unconfigured must
+    never block or fail an actual build."""
+    try:
+        cfg = config_grabber.read_config()
+        webhook_url = cfg.get("SLACK", "WEBHOOK_URL", fallback="").strip()
+        if not webhook_url:
+            return
+        text = f":gear: Config build started — *{message}*\n<{log_url}|View run {run_id}>"
+        requests.post(webhook_url, json={"text": text}, timeout=5)
+    except Exception:
+        logger.warning("Slack notification failed", exc_info=True)
+
+
+def _run_build(run, message, log_url):
     cg_logger = logging.getLogger("config_grabber")
     handler = _RunLogHandler(run)
     cg_logger.addHandler(handler)
     logger.addHandler(handler)
     try:
+        _notify_slack_build_started(message, run["id"], log_url)
         result = config_grabber.build(message)
         run["status"] = "success"
         run["result"] = result
@@ -126,7 +142,8 @@ def webhook():
         return jsonify(error="a config grab is already running"), 409
 
     run = _new_run(message)
-    threading.Thread(target=_run_build, args=(run, message), daemon=True).start()
+    log_url = request.url_root.rstrip("/") + f"/runs/{run['id']}"
+    threading.Thread(target=_run_build, args=(run, message, log_url), daemon=True).start()
     return jsonify(status="accepted", message=message, run_id=run["id"], log_url=f"/runs/{run['id']}"), 202
 
 

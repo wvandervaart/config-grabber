@@ -6,3 +6,8 @@ TAGNAME=automated
 URL=<giturl without prefix>
 URLPREFIX=https://
 PATH=./configs/
+
+[SLACK]
+# Optional: posts a notification with a link to the run when a build starts.
+# Leave blank (or omit this section entirely) to disable.
+WEBHOOK_URL=
