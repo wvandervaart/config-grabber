@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import pynetbox
 import tkn
 import git
@@ -61,6 +62,20 @@ async def _fetch_all(devices, path):
         results = await asyncio.gather(*tasks, return_exceptions=True)
     return results
 
+def _prune_stale_configs(path, devices):
+    """Remove .set files for devices no longer in the current tagged inventory."""
+    try:
+        existing = os.listdir(path)
+    except FileNotFoundError:
+        return
+    current_names = {os.path.basename(str(d.name)) for d in devices}
+    for entry in existing:
+        if not entry.endswith(".set"):
+            continue
+        if entry[: -len(".set")] not in current_names:
+            os.remove(os.path.join(path, entry))
+            logger.info("Removed stale config: %s", entry)
+
 def get_device_configs(cfg, nb, t, f):
     path = cfg.get('GIT', 'PATH') + 'configs/'
     if t == "role":
@@ -71,12 +86,15 @@ def get_device_configs(cfg, nb, t, f):
         devices = nb.dcim.devices.filter(tag=cfg.get('NETBOX', 'TAGNAME'))
     else:
         raise ValueError(f"Unknown device filter type: {t!r}")
-    results = asyncio.run(_fetch_all(list(devices), path))
+    devices = list(devices)
+    results = asyncio.run(_fetch_all(devices, path))
     for result in results:
         if isinstance(result, Exception):
             logger.error("Failed to grab config: %s", result)
         else:
             logger.info("Grabbed config: %s", result)
+    if t == "all":
+        _prune_stale_configs(path, devices)
 
 def is_git_repo(path):
     try:
@@ -110,13 +128,20 @@ def git_add(repo, msg):
 def git_push(repo, branch_name):
     repo.git.push('origin', '-u', branch_name)
 
+def sanitize_branch_component(value):
+    """Make an arbitrary string safe to use as part of a git ref name."""
+    value = re.sub(r'[^A-Za-z0-9._-]+', '_', value)
+    value = re.sub(r'\.{2,}', '.', value)
+    value = value.strip('-.')
+    return value or "webhook"
+
 def build(message):
     t = "all"
     f = "all"
     m = message
     now = datetime.now()
     dt_string = now.strftime("%Y%m%d %H:%M:%S")
-    branch_name = m.replace(" ", "_") + "_" + now.strftime("%Y%m%d%H%M%S")
+    branch_name = sanitize_branch_component(m) + "_" + now.strftime("%Y%m%d%H%M%S")
     m = m + " " + dt_string
     cfg = read_config()
     nb = connect(cfg)
