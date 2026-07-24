@@ -75,21 +75,33 @@ def _post_to_slack(text):
 
 
 def _notify_slack_build_started(message, run_id, log_url):
-    _post_to_slack(f":gear: Config build started — *{_slack_escape(message)}*\n<{log_url}|View run {run_id}>")
+    # Each notify function must never raise: it runs inline with build-status
+    # tracking in _run_build, and a bug here must not get mistaken for the
+    # build itself failing (or mask a real failure).
+    try:
+        _post_to_slack(f":gear: Config build started — *{_slack_escape(message)}*\n<{log_url}|View run {run_id}>")
+    except Exception:
+        logger.warning("Failed to send Slack 'build started' notification", exc_info=True)
 
 
 def _notify_slack_build_finished(message, run_id, log_url, result):
-    _post_to_slack(
-        f":white_check_mark: Config build finished — *{_slack_escape(message)}*\n"
-        f"{_slack_escape(result)}\n<{log_url}|View run {run_id}>"
-    )
+    try:
+        _post_to_slack(
+            f":white_check_mark: Config build finished — *{_slack_escape(message)}*\n"
+            f"{_slack_escape(result)}\n<{log_url}|View run {run_id}>"
+        )
+    except Exception:
+        logger.warning("Failed to send Slack 'build finished' notification", exc_info=True)
 
 
 def _notify_slack_build_failed(message, run_id, log_url, error):
-    _post_to_slack(
-        f":x: Config build failed — *{_slack_escape(message)}*\n"
-        f"{_slack_escape(error)}\n<{log_url}|View run {run_id}>"
-    )
+    try:
+        _post_to_slack(
+            f":x: Config build failed — *{_slack_escape(message)}*\n"
+            f"{_slack_escape(error)}\n<{log_url}|View run {run_id}>"
+        )
+    except Exception:
+        logger.warning("Failed to send Slack 'build failed' notification", exc_info=True)
 
 
 def _run_build(run, message, log_url):
