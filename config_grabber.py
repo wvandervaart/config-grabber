@@ -81,7 +81,7 @@ def _prune_stale_configs(path, devices):
             logger.info("Removed stale config: %s", entry)
 
 def get_device_configs(cfg, nb, t, f):
-    path = cfg.get('GIT', 'PATH') + 'configs/'
+    path = os.path.join(cfg.get('GIT', 'PATH'), 'configs')
     if t == "role":
         devices = nb.dcim.devices.filter(role=f, tag=cfg.get('NETBOX', 'TAGNAME'))
     elif t == "device":
