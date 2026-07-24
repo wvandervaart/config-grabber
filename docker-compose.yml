@@ -4,7 +4,6 @@ services:
     ports:
       - "8080:8080"
     environment:
-      WEBHOOK_SECRET: ${WEBHOOK_SECRET}
       NB_TOKEN: ${NB_TOKEN}
       GIT_TOKEN: ${GIT_TOKEN}
       GIT_USER_NAME: ${GIT_USER_NAME}
