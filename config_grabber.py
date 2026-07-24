@@ -39,7 +39,7 @@ async def grab_config(device, path, executor=None):
 async def _fetch_all(devices, path):
     with ThreadPoolExecutor() as executor:
         tasks = [grab_config(device, path, executor) for device in devices]
-        results = await asyncio.gather(*tasks)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
     return results
 
 def get_device_configs(cfg, nb, t, f):
@@ -50,8 +50,14 @@ def get_device_configs(cfg, nb, t, f):
         devices = nb.dcim.devices.filter(name=f, tag=cfg.get('NETBOX', 'TAGNAME'))
     elif t == "all":
         devices = nb.dcim.devices.filter(tag=cfg.get('NETBOX', 'TAGNAME'))
+    else:
+        raise ValueError(f"Unknown device filter type: {t!r}")
     results = asyncio.run(_fetch_all(list(devices), path))
-    print(results)
+    for result in results:
+        if isinstance(result, Exception):
+            print(f"Failed to grab config: {result}")
+        else:
+            print(f"Grabbed config: {result}")
 
 def is_git_repo(path):
     try:
