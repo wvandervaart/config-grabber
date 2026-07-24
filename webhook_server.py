@@ -16,6 +16,7 @@ _lock = threading.Lock()
 
 
 def _run_build(message):
+    logger.info("Build started")
     try:
         result = config_grabber.build(message)
         logger.info("Build finished: %s", result)
@@ -35,6 +36,7 @@ def webhook():
     message = request.args.get("message", "webhook")
 
     if not _lock.acquire(blocking=False):
+        logger.info("a config grab is already running")
         return jsonify(error="a config grab is already running"), 409
 
     threading.Thread(target=_run_build, args=(message,), daemon=True).start()

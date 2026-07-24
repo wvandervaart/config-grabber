@@ -1,5 +1,9 @@
-import config_grabber
+import logging
 import sys
+
+import config_grabber
+
+logging.basicConfig(level=logging.INFO)
 
 if len(sys.argv) == 2:
     print(f"Grab configs, and name BRANCH: { sys.argv[1] }")

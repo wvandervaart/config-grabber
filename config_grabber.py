@@ -1,3 +1,5 @@
+import logging
+import os
 import pynetbox
 import tkn
 import git
@@ -6,6 +8,8 @@ import requests
 from datetime import datetime
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+
+logger = logging.getLogger(__name__)
 
 # Matches ThreadPoolExecutor's default max_workers (min(32, cpu_count+4)) so
 # concurrent device fetches don't exceed the session's connection pool.
@@ -30,7 +34,8 @@ async def grab_config(device, path, executor=None):
 
     def _write():
         config = device.render_config.create()
-        with open(path + device.name + ".set", "w") as f:
+        filename = os.path.basename(device.name) + ".set"
+        with open(os.path.join(path, filename), "w") as f:
             f.write(config['content'])
         return device.name
 
@@ -55,9 +60,9 @@ def get_device_configs(cfg, nb, t, f):
     results = asyncio.run(_fetch_all(list(devices), path))
     for result in results:
         if isinstance(result, Exception):
-            print(f"Failed to grab config: {result}")
+            logger.error("Failed to grab config: %s", result)
         else:
-            print(f"Grabbed config: {result}")
+            logger.info("Grabbed config: %s", result)
 
 def is_git_repo(path):
     try:
@@ -107,11 +112,11 @@ def build(message):
         get_device_configs(cfg, nb, t, f)
         if repo.is_dirty() or repo.untracked_files:
             git_add(repo, m)
-            print(f"Pushing config with message: {m}")
+            logger.info("Pushing config with message: %s", m)
             git_push(repo, branch_name)
             returnmsg = f"Pushed with message: {m}"
         else:
-            print("No changes found, no push needed.")
+            logger.info("No changes found, no push needed.")
             returnmsg = "No changes found, no push needed."
     finally:
         git_main(repo)
