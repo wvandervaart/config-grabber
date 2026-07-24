@@ -15,6 +15,20 @@ logger = logging.getLogger(__name__)
 # concurrent device fetches don't exceed the session's connection pool.
 POOL_MAXSIZE = 32
 
+# pynetbox sets no request timeout of its own, so a hung/slow NetBox server
+# would otherwise block a fetch thread (and the webhook's build lock) forever.
+REQUEST_TIMEOUT = 30
+
+class TimeoutHTTPAdapter(requests.adapters.HTTPAdapter):
+    def __init__(self, *args, timeout=REQUEST_TIMEOUT, **kwargs):
+        self.timeout = timeout
+        super().__init__(*args, **kwargs)
+
+    def send(self, request, **kwargs):
+        if kwargs.get("timeout") is None:
+            kwargs["timeout"] = self.timeout
+        return super().send(request, **kwargs)
+
 def read_config():
     config = configparser.ConfigParser()
     config.read('.config')
@@ -23,7 +37,7 @@ def read_config():
 def connect(cfg):
     url = cfg.get('NETBOX', 'URL')
     nb = pynetbox.api(url, tkn.get('nb'))
-    adapter = requests.adapters.HTTPAdapter(pool_maxsize=POOL_MAXSIZE)
+    adapter = TimeoutHTTPAdapter(pool_maxsize=POOL_MAXSIZE)
     nb.http_session.mount('https://', adapter)
     nb.http_session.mount('http://', adapter)
     return nb
