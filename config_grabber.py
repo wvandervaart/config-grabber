@@ -119,6 +119,11 @@ def git_clone(cfg):
         repo = git.Repo.clone_from(urlprefix + tkn.get('git') + "@" + url, path, branch="main")
     else:
         repo = git.Repo(path)
+        # A prior run that got killed outright (e.g. SIGKILL) has no chance to
+        # run its own cleanup, so the working copy can be left checked out on
+        # a stray build branch. Force back onto main before pulling so the
+        # next build always starts from a clean, known state.
+        repo.git.checkout("main", force=True)
         repo.remotes.origin.pull()
     return repo
 

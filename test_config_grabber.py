@@ -206,6 +206,14 @@ class TestGitClone:
         mock_repo.remotes.origin.pull.assert_called_once()
         assert result is mock_repo
 
+    def test_forces_back_to_main_before_pulling(self, cfg, mock_repo):
+        """A prior run left the working copy on a stray branch (e.g. killed
+        mid-build); git_clone must self-heal back to main before pulling."""
+        with patch("config_grabber.is_git_repo", return_value=True), \
+             patch("config_grabber.git.Repo", return_value=mock_repo):
+            cg.git_clone(cfg)
+        mock_repo.git.checkout.assert_called_once_with("main", force=True)
+
 
 # ===========================================================================
 # git helpers

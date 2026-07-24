@@ -20,4 +20,8 @@ EXPOSE 8080
 ENTRYPOINT ["./entrypoint.sh"]
 # Single worker: builds mutate a shared git working copy in ./configs,
 # so concurrent workers would race on the same checkout.
-CMD ["gunicorn", "-b", "0.0.0.0:8080", "-w", "1", "webhook_server:app"]
+# --timeout raised well above gunicorn's 30s default: the webhook request
+# itself returns immediately, but the background build thread's GIL
+# contention (many concurrent device fetches) can starve the worker's
+# heartbeat long enough for the default timeout to kill it mid-build.
+CMD ["gunicorn", "-b", "0.0.0.0:8080", "-w", "1", "--timeout", "300", "webhook_server:app"]
