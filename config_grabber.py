@@ -18,7 +18,7 @@ POOL_MAXSIZE = 32
 
 # pynetbox sets no request timeout of its own, so a hung/slow NetBox server
 # would otherwise block a fetch thread (and the webhook's build lock) forever.
-REQUEST_TIMEOUT = 30
+REQUEST_TIMEOUT = 60
 
 class TimeoutHTTPAdapter(requests.adapters.HTTPAdapter):
     def __init__(self, *args, timeout=REQUEST_TIMEOUT, **kwargs):

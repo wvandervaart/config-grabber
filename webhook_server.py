@@ -16,7 +16,7 @@ _lock = threading.Lock()
 
 
 def _run_build(message):
-    logger.info("Build started")
+    logger.info("Build started: %s", message)
     try:
         result = config_grabber.build(message)
         logger.info("Build finished: %s", result)
