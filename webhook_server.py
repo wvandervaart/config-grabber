@@ -1,4 +1,3 @@
-import hmac
 import logging
 import os
 import threading
@@ -10,8 +9,6 @@ import config_grabber
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("webhook")
-
-WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET")
 
 # A single lock (not per-worker-safe) is intentional: the app is meant to run
 # with a single gunicorn worker since builds share one git working copy.
@@ -33,15 +30,9 @@ def health():
     return jsonify(status="ok")
 
 
-@app.post("/webhook")
+@app.get("/")
 def webhook():
-    if WEBHOOK_SECRET:
-        provided = request.headers.get("X-Webhook-Secret", "")
-        if not hmac.compare_digest(provided, WEBHOOK_SECRET):
-            return jsonify(error="unauthorized"), 401
-
-    payload = request.get_json(silent=True) or {}
-    message = payload.get("message", "webhook")
+    message = request.args.get("message", "webhook")
 
     if not _lock.acquire(blocking=False):
         return jsonify(error="a config grab is already running"), 409
