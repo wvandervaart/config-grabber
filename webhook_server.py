@@ -56,7 +56,12 @@ def _new_run(message):
     return run
 
 
-def _notify_slack_build_started(message, run_id, log_url):
+def _slack_escape(text):
+    # Per Slack's formatting spec: https://api.slack.com/reference/surfaces/formatting#escaping
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _post_to_slack(text):
     """Best-effort notification; Slack being unreachable/unconfigured must
     never block or fail an actual build."""
     try:
@@ -64,10 +69,27 @@ def _notify_slack_build_started(message, run_id, log_url):
         webhook_url = cfg.get("SLACK", "WEBHOOK_URL", fallback="").strip()
         if not webhook_url:
             return
-        text = f":gear: Config build started — *{message}*\n<{log_url}|View run {run_id}>"
         requests.post(webhook_url, json={"text": text}, timeout=5)
     except Exception:
         logger.warning("Slack notification failed", exc_info=True)
+
+
+def _notify_slack_build_started(message, run_id, log_url):
+    _post_to_slack(f":gear: Config build started — *{_slack_escape(message)}*\n<{log_url}|View run {run_id}>")
+
+
+def _notify_slack_build_finished(message, run_id, log_url, result):
+    _post_to_slack(
+        f":white_check_mark: Config build finished — *{_slack_escape(message)}*\n"
+        f"{_slack_escape(result)}\n<{log_url}|View run {run_id}>"
+    )
+
+
+def _notify_slack_build_failed(message, run_id, log_url, error):
+    _post_to_slack(
+        f":x: Config build failed — *{_slack_escape(message)}*\n"
+        f"{_slack_escape(error)}\n<{log_url}|View run {run_id}>"
+    )
 
 
 def _run_build(run, message, log_url):
@@ -81,10 +103,12 @@ def _run_build(run, message, log_url):
         run["status"] = "success"
         run["result"] = result
         logger.info("Build finished: %s", result)
+        _notify_slack_build_finished(message, run["id"], log_url, result)
     except Exception as exc:
         run["status"] = "error"
         run["result"] = str(exc)
         logger.exception("Build failed")
+        _notify_slack_build_failed(message, run["id"], log_url, str(exc))
     finally:
         cg_logger.removeHandler(handler)
         logger.removeHandler(handler)
