@@ -57,7 +57,7 @@ def is_git_repo(path):
     try:
         _ = git.Repo(path).git_dir
         return True
-    except git.exc.InvalidGitRepositoryError:
+    except (git.exc.InvalidGitRepositoryError, git.exc.NoSuchPathError):
         return False
 
 def git_clone(cfg):
@@ -96,15 +96,17 @@ def build(message):
     cfg = read_config()
     nb = connect(cfg)
     repo = git_clone(cfg)
-    git_branch(repo, branch_name)
-    get_device_configs(cfg, nb, t, f)
-    if repo.is_dirty() or repo.untracked_files:
-        git_add(repo, m)
-        print(f"Pushing config with message: {m}")
-        git_push(repo, branch_name)
-        returnmsg = f"Pushed with message: {m}"
-    else:
-        print("No changes found, no push needed.")
-        returnmsg = "No changes found, no push needed."
-    git_main(repo)
+    try:
+        git_branch(repo, branch_name)
+        get_device_configs(cfg, nb, t, f)
+        if repo.is_dirty() or repo.untracked_files:
+            git_add(repo, m)
+            print(f"Pushing config with message: {m}")
+            git_push(repo, branch_name)
+            returnmsg = f"Pushed with message: {m}"
+        else:
+            print("No changes found, no push needed.")
+            returnmsg = "No changes found, no push needed."
+    finally:
+        git_main(repo)
     return returnmsg
