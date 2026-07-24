@@ -243,7 +243,7 @@ class TestBuild:
             patch("config_grabber.connect"),
             patch("config_grabber.git_clone", return_value=mock_repo),
             patch("config_grabber.git_branch"),
-            patch("config_grabber.get_device_configs"),
+            patch("config_grabber.get_device_configs", return_value=[]),
             patch("config_grabber.git_add"),
             patch("config_grabber.git_push"),
             patch("config_grabber.git_main"),
@@ -255,7 +255,7 @@ class TestBuild:
              patch("config_grabber.connect"), \
              patch("config_grabber.git_clone", return_value=mock_repo), \
              patch("config_grabber.git_branch"), \
-             patch("config_grabber.get_device_configs"), \
+             patch("config_grabber.get_device_configs", return_value=[]), \
              patch("config_grabber.git_add"), \
              patch("config_grabber.git_push"), \
              patch("config_grabber.git_main"):
@@ -267,7 +267,7 @@ class TestBuild:
              patch("config_grabber.connect"), \
              patch("config_grabber.git_clone", return_value=mock_repo), \
              patch("config_grabber.git_branch"), \
-             patch("config_grabber.get_device_configs"), \
+             patch("config_grabber.get_device_configs", return_value=[]), \
              patch("config_grabber.git_add"), \
              patch("config_grabber.git_push"), \
              patch("config_grabber.git_main"):
@@ -279,7 +279,7 @@ class TestBuild:
              patch("config_grabber.connect"), \
              patch("config_grabber.git_clone", return_value=mock_repo), \
              patch("config_grabber.git_branch"), \
-             patch("config_grabber.get_device_configs"), \
+             patch("config_grabber.get_device_configs", return_value=[]), \
              patch("config_grabber.git_add"), \
              patch("config_grabber.git_push") as mock_push, \
              patch("config_grabber.git_main"):
@@ -292,7 +292,7 @@ class TestBuild:
              patch("config_grabber.connect"), \
              patch("config_grabber.git_clone", return_value=mock_repo), \
              patch("config_grabber.git_branch"), \
-             patch("config_grabber.get_device_configs"), \
+             patch("config_grabber.get_device_configs", return_value=[]), \
              patch("config_grabber.git_add"), \
              patch("config_grabber.git_push") as mock_push, \
              patch("config_grabber.git_main"):
@@ -305,7 +305,7 @@ class TestBuild:
              patch("config_grabber.connect"), \
              patch("config_grabber.git_clone", return_value=mock_repo), \
              patch("config_grabber.git_branch"), \
-             patch("config_grabber.get_device_configs"), \
+             patch("config_grabber.get_device_configs", return_value=[]), \
              patch("config_grabber.git_add"), \
              patch("config_grabber.git_push"), \
              patch("config_grabber.git_main") as mock_gm:
@@ -317,7 +317,7 @@ class TestBuild:
              patch("config_grabber.connect"), \
              patch("config_grabber.git_clone", return_value=mock_repo), \
              patch("config_grabber.git_branch") as mock_gb, \
-             patch("config_grabber.get_device_configs"), \
+             patch("config_grabber.get_device_configs", return_value=[]), \
              patch("config_grabber.git_add"), \
              patch("config_grabber.git_push"), \
              patch("config_grabber.git_main"):
@@ -331,7 +331,7 @@ class TestBuild:
              patch("config_grabber.connect"), \
              patch("config_grabber.git_clone", return_value=mock_repo), \
              patch("config_grabber.git_branch"), \
-             patch("config_grabber.get_device_configs"), \
+             patch("config_grabber.get_device_configs", return_value=[]), \
              patch("config_grabber.git_add") as mock_ga, \
              patch("config_grabber.git_push"), \
              patch("config_grabber.git_main"):

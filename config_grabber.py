@@ -31,6 +31,10 @@ class TimeoutHTTPAdapter(requests.adapters.HTTPAdapter):
         return super().send(request, **kwargs)
 
 def read_config():
+    if not os.path.exists('.config'):
+        raise FileNotFoundError(
+            "Config file '.config' not found. See .config_example for the required format."
+        )
     config = configparser.ConfigParser()
     config.read('.config')
     return config
@@ -88,13 +92,16 @@ def get_device_configs(cfg, nb, t, f):
         raise ValueError(f"Unknown device filter type: {t!r}")
     devices = list(devices)
     results = asyncio.run(_fetch_all(devices, path))
-    for result in results:
+    failures = []
+    for device, result in zip(devices, results):
         if isinstance(result, Exception):
-            logger.error("Failed to grab config: %s", result)
+            logger.error("Failed to grab config for %s: %s", device.name, result)
+            failures.append(device.name)
         else:
             logger.info("Grabbed config: %s", result)
     if t == "all":
         _prune_stale_configs(path, devices)
+    return failures
 
 def is_git_repo(path):
     try:
@@ -145,18 +152,23 @@ def build(message):
     m = m + " " + dt_string
     cfg = read_config()
     nb = connect(cfg)
-    repo = git_clone(cfg)
     try:
-        git_branch(repo, branch_name)
-        get_device_configs(cfg, nb, t, f)
-        if repo.is_dirty() or repo.untracked_files:
-            git_add(repo, m)
-            logger.info("Pushing config with message: %s", m)
-            git_push(repo, branch_name)
-            returnmsg = f"Pushed with message: {m}"
-        else:
-            logger.info("No changes found, no push needed.")
-            returnmsg = "No changes found, no push needed."
+        repo = git_clone(cfg)
+        try:
+            git_branch(repo, branch_name)
+            failures = get_device_configs(cfg, nb, t, f)
+            if repo.is_dirty() or repo.untracked_files:
+                git_add(repo, m)
+                logger.info("Pushing config with message: %s", m)
+                git_push(repo, branch_name)
+                returnmsg = f"Pushed with message: {m}"
+            else:
+                logger.info("No changes found, no push needed.")
+                returnmsg = "No changes found, no push needed."
+        finally:
+            git_main(repo)
     finally:
-        git_main(repo)
+        nb.http_session.close()
+    if failures:
+        returnmsg += f" ({len(failures)} device(s) failed: {', '.join(failures)})"
     return returnmsg
