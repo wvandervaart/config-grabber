@@ -171,7 +171,9 @@ def health():
 
 @app.get("/")
 def webhook():
-    message = request.args.get("message", "webhook")
+    message = request.args.get("message")
+    if not message:
+        return jsonify(error="missing required 'message' parameter"), 400
 
     if not _lock.acquire(blocking=False):
         logger.info("a config grab is already running")
