@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Lints staged Python files with ruff before allowing a commit.
+# Activate with: git config core.hooksPath .githooks
+set -euo pipefail
+
+repo_root=$(git rev-parse --show-toplevel)
+
+if command -v ruff >/dev/null 2>&1; then
+    ruff_bin=ruff
+elif [ -x "$repo_root/venv/bin/ruff" ]; then
+    ruff_bin="$repo_root/venv/bin/ruff"
+else
+    echo "pre-commit: ruff not found (install it with 'pip install ruff')" >&2
+    exit 1
+fi
+
+mapfile -t staged_py_files < <(git diff --cached --name-only --diff-filter=ACM -- '*.py')
+
+if [ "${#staged_py_files[@]}" -eq 0 ]; then
+    exit 0
+fi
+
+"$ruff_bin" check "${staged_py_files[@]}"
