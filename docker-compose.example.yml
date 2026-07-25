@@ -1,0 +1,21 @@
+services:
+  config-grabber:
+    image: terrean/config-grabber:latest
+    ports:
+      - "8080:8080"
+    environment:
+      NB_TOKEN: ${NB_TOKEN}
+      GIT_TOKEN: ${GIT_TOKEN}
+      GIT_USER_NAME: ${GIT_USER_NAME}
+      GIT_USER_EMAIL: ${GIT_USER_EMAIL}
+    volumes:
+      - ./.config:/app/.config:ro
+      - config-data:/app/configs
+      - run-history-data:/app/data
+      # Internal/private CA cert(s) for git.triplinq.net, if the git server's
+      # certificate isn't signed by a public CA. Drop .crt files in ./certs.
+      - ./certs:/usr/local/share/ca-certificates:ro
+
+volumes:
+  config-data:
+  run-history-data:
