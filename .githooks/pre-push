@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Runs the test suite before allowing a push.
+# Activate with: git config core.hooksPath .githooks
+set -euo pipefail
+
+repo_root=$(git rev-parse --show-toplevel)
+
+if [ -x "$repo_root/venv/bin/python" ]; then
+    python_bin="$repo_root/venv/bin/python"
+else
+    python_bin=python3
+fi
+
+if ! "$python_bin" -c "import pytest" >/dev/null 2>&1; then
+    echo "pre-push: pytest not found (install it with 'pip install pytest')" >&2
+    exit 1
+fi
+
+(cd "$repo_root" && "$python_bin" -m pytest tests)
