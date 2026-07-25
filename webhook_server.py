@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import threading
@@ -21,8 +22,11 @@ _lock = threading.Lock()
 
 # Builds are serialized by _lock, so a single in-memory run history (capped
 # so a long-lived process doesn't accumulate logs forever) is safe without
-# per-run locking.
-MAX_RUNS = 20
+# per-run locking. Mirrored to disk (see RUN_HISTORY_PATH) so it survives a
+# container restart. Deliberately outside cfg['GIT']['PATH'] (the device-config
+# checkout) so it never gets swept up by that repo's `git add --all`.
+MAX_RUNS = 30
+RUN_HISTORY_PATH = os.environ.get("RUN_HISTORY_PATH", os.path.join("data", "run_history.json"))
 _runs = OrderedDict()
 _runs_lock = threading.Lock()
 
@@ -53,7 +57,49 @@ def _new_run(message):
         _runs[run["id"]] = run
         while len(_runs) > MAX_RUNS:
             _runs.popitem(last=False)
+    _save_runs()
     return run
+
+
+def _save_runs():
+    """Best-effort mirror of the run history to disk; a write failure (e.g.
+    read-only filesystem) must never break a build, only lose persistence."""
+    try:
+        with _runs_lock:
+            data = list(_runs.values())
+        dirname = os.path.dirname(RUN_HISTORY_PATH)
+        if dirname:
+            os.makedirs(dirname, exist_ok=True)
+        tmp_path = RUN_HISTORY_PATH + ".tmp"
+        with open(tmp_path, "w") as f:
+            json.dump(data, f)
+        os.replace(tmp_path, RUN_HISTORY_PATH)
+    except OSError:
+        logger.warning("Failed to persist run history to %s", RUN_HISTORY_PATH, exc_info=True)
+
+
+def _load_runs():
+    """Restore run history saved by a previous process. A run still marked
+    "running" belonged to a process that's gone (no thread survives a
+    restart to finish it), so it's relabeled "interrupted" rather than left
+    to look like a build that's hung forever."""
+    if not os.path.exists(RUN_HISTORY_PATH):
+        return
+    try:
+        with open(RUN_HISTORY_PATH) as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        logger.warning("Failed to load run history from %s", RUN_HISTORY_PATH, exc_info=True)
+        return
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    for run in data:
+        if run.get("status") == "running":
+            run["status"] = "interrupted"
+            run["finished_at"] = run.get("finished_at") or now
+            run.setdefault("lines", []).append("[server restarted while this run was in progress]")
+        _runs[run["id"]] = run
+    while len(_runs) > MAX_RUNS:
+        _runs.popitem(last=False)
 
 
 def _slack_escape(text):
@@ -125,6 +171,7 @@ def _run_build(run, message, log_url):
         cg_logger.removeHandler(handler)
         logger.removeHandler(handler)
         run["finished_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        _save_runs()
         _lock.release()
 
 
@@ -138,7 +185,9 @@ def _run_summary(run):
     }
 
 
-_STATUS_COLORS = {"running": "#b58900", "success": "#2e7d32", "error": "#c62828"}
+_STATUS_COLORS = {"running": "#b58900", "success": "#2e7d32", "error": "#c62828", "interrupted": "#757575"}
+
+_load_runs()
 
 
 def _page(title, body):

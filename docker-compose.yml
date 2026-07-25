@@ -11,9 +11,11 @@ services:
     volumes:
       - ./.config:/app/.config:ro
       - config-data:/app/configs
+      - run-history-data:/app/data
       # Internal/private CA cert(s) for git.triplinq.net, if the git server's
       # certificate isn't signed by a public CA. Drop .crt files in ./certs.
       - ./certs:/usr/local/share/ca-certificates:ro
 
 volumes:
   config-data:
+  run-history-data:

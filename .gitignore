@@ -1,5 +1,6 @@
 configs
 configs/.*
+data
 venv
 __pycache__
 .config
