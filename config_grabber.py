@@ -1,14 +1,16 @@
+import asyncio
+import configparser
 import logging
 import os
 import re
-import pynetbox
-import tkn
-import git
-import configparser
-import requests
-from datetime import datetime
-import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
+
+import git
+import pynetbox
+import requests
+
+import tkn
 
 logger = logging.getLogger(__name__)
 

@@ -1,0 +1,8 @@
+line-length = 120
+
+[lint]
+select = ["E", "F", "I"]
+
+[lint.per-file-ignores]
+# Long lines here are embedded HTML/CSS template content, not code.
+"webhook_server.py" = ["E501"]

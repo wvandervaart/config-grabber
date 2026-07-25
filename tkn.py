@@ -11,10 +11,10 @@ ENV_VARS = {
 
 def get(TARGET):
     """Read token from the environment variable mapped to TARGET."""
-    env_var = ENV_VARS.get(TARGET, "{}_TOKEN".format(TARGET.upper()))
+    env_var = ENV_VARS.get(TARGET, f"{TARGET.upper()}_TOKEN")
     token = os.environ.get(env_var)
     if not token:
-        print("{} environment variable is not set.".format(env_var))
+        print(f"{env_var} environment variable is not set.")
         print("EXITING")
         sys.exit(1)
     return token
