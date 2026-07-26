@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import threading
+import time
 import uuid
 from collections import OrderedDict
 from datetime import datetime, timezone
@@ -52,6 +53,7 @@ def _new_run(message):
         "status": "running",
         "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "finished_at": None,
+        "duration_seconds": None,
         "result": None,
         "lines": [],
     }
@@ -157,17 +159,22 @@ def _run_build(run, message, log_url):
     handler = _RunLogHandler(run)
     cg_logger.addHandler(handler)
     logger.addHandler(handler)
+    start = time.monotonic()
     try:
         _notify_slack_build_started(message, run["id"], log_url)
         result = config_grabber.build(message)
         run["status"] = "success"
         run["result"] = result
-        logger.info("Build finished: %s", result)
+        elapsed = time.monotonic() - start
+        run["duration_seconds"] = round(elapsed, 1)
+        logger.info("Build finished in %.1fs: %s", elapsed, result)
         _notify_slack_build_finished(message, run["id"], log_url, result)
     except Exception as exc:
+        elapsed = time.monotonic() - start
+        run["duration_seconds"] = round(elapsed, 1)
         run["status"] = "error"
         run["result"] = str(exc)
-        logger.exception("Build failed")
+        logger.exception("Build failed after %.1fs", elapsed)
         _notify_slack_build_failed(message, run["id"], log_url, str(exc))
     finally:
         cg_logger.removeHandler(handler)
@@ -184,7 +191,12 @@ def _run_summary(run):
         "status": run["status"],
         "started_at": run["started_at"],
         "finished_at": run["finished_at"],
+        "duration_seconds": run.get("duration_seconds"),
     }
+
+
+def _format_duration(duration_seconds):
+    return f"{duration_seconds:.1f}s" if duration_seconds is not None else "-"
 
 
 _STATUS_COLORS = {"running": "#b58900", "success": "#2e7d32", "error": "#c62828", "interrupted": "#757575"}
@@ -259,18 +271,19 @@ def list_runs():
         return jsonify(runs=runs)
 
     if not runs:
-        rows = "<tr><td colspan=4>No runs yet.</td></tr>"
+        rows = "<tr><td colspan=5>No runs yet.</td></tr>"
     else:
         rows = "\n".join(
             f'<tr><td><a href="/runs/{r["id"]}">{escape(r["id"])}</a></td>'
             f'<td>{escape(r["message"])}</td>'
             f'<td><span class="status" style="background:{_STATUS_COLORS.get(r["status"], "#555")}">{escape(r["status"])}</span></td>'
-            f'<td>{escape(r["started_at"])}</td></tr>'
+            f'<td>{escape(r["started_at"])}</td>'
+            f'<td>{escape(_format_duration(r.get("duration_seconds")))}</td></tr>'
             for r in runs
         )
     body = f"""<h1>Recent runs</h1>
 <table>
-<tr><th>ID</th><th>Message</th><th>Status</th><th>Started</th></tr>
+<tr><th>ID</th><th>Message</th><th>Status</th><th>Started</th><th>Duration</th></tr>
 {rows}
 </table>"""
     return Response(_page("Runs", body), content_type="text/html; charset=utf-8")
@@ -295,7 +308,8 @@ def view_run(run_id):
 <span class="status" style="background:{_STATUS_COLORS.get(snapshot['status'], '#555')}">{escape(snapshot['status'])}</span></h1>
 <div class="meta">message: {escape(snapshot['message'])}<br>
 started: {escape(snapshot['started_at'])}<br>
-finished: {escape(snapshot['finished_at'] or '-')}</div>
+finished: {escape(snapshot['finished_at'] or '-')}<br>
+duration: {escape(_format_duration(snapshot.get('duration_seconds')))}</div>
 <pre>{log_text}</pre>
 {result_html}
 <p><a href="/runs">all runs</a></p>"""

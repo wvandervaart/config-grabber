@@ -14,9 +14,18 @@ import tkn
 
 logger = logging.getLogger(__name__)
 
-# Matches ThreadPoolExecutor's default max_workers (min(32, cpu_count+4)) so
-# concurrent device fetches don't exceed the session's connection pool.
+# Device fetches are I/O-bound (waiting on NetBox HTTP responses), so the
+# thread pool is sized explicitly rather than left at ThreadPoolExecutor's
+# default of min(32, cpu_count+4) — on a small container (e.g. 2-4 CPUs)
+# that default would cap concurrency at 6-8 regardless of how many devices
+# there are to fetch.
 POOL_MAXSIZE = 32
+
+# Deliberately lower than POOL_MAXSIZE: config rendering is done server-side
+# by NetBox, and testing against a real instance showed pushing concurrency
+# up to POOL_MAXSIZE didn't reliably help (server load dominated) and caused
+# an occasional request failure. 14 held up without failures.
+FETCH_MAX_WORKERS = 14
 
 # pynetbox sets no request timeout of its own, so a hung/slow NetBox server
 # would otherwise block a fetch thread (and the webhook's build lock) forever.
@@ -63,7 +72,7 @@ async def grab_config(device, path, executor=None):
     return await loop.run_in_executor(executor, _write)
 
 async def _fetch_all(devices, path):
-    with ThreadPoolExecutor() as executor:
+    with ThreadPoolExecutor(max_workers=FETCH_MAX_WORKERS) as executor:
         tasks = [grab_config(device, path, executor) for device in devices]
         results = await asyncio.gather(*tasks, return_exceptions=True)
     return results
