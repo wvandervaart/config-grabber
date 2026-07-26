@@ -6,6 +6,7 @@ import sys
 ENV_VARS = {
     "nb": "NB_TOKEN",
     "git": "GIT_TOKEN",
+    "webhook": "WEBHOOK_TOKEN",
 }
 
 

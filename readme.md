@@ -11,7 +11,7 @@ python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
 cp .config_example .config   # NetBox URL/tag, git repo URL/path, optional Slack webhook
-cp .env_example .env         # NB_TOKEN, GIT_TOKEN, GIT_USER_NAME, GIT_USER_EMAIL
+cp .env_example .env         # NB_TOKEN, GIT_TOKEN, WEBHOOK_TOKEN, GIT_USER_NAME, GIT_USER_EMAIL
 ```
 
 ## Running
@@ -19,8 +19,10 @@ cp .env_example .env         # NB_TOKEN, GIT_TOKEN, GIT_USER_NAME, GIT_USER_EMAI
 ```
 python main.py <branch-name-message>                        # one-off CLI build
 python webhook_server.py                                     # HTTP service (PORT env, default 8080)
-python trigger_webhook.py "message" --url http://localhost:8080/   # trigger a running server
+python trigger_webhook.py "message" --url http://localhost:8080/ --token <token>   # trigger a running server
 ```
+
+The webhook's trigger endpoint (`POST /`) requires an `Authorization: Bearer <token>` header matching `WEBHOOK_TOKEN`; `trigger_webhook.py` reads the token from `--token` or the `WEBHOOK_TOKEN` env var. `/health` and the `/runs` history pages are not authenticated.
 
 ## Docker
 

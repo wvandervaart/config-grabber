@@ -1,3 +1,4 @@
+import hmac
 import json
 import logging
 import os
@@ -11,6 +12,7 @@ import requests
 from flask import Flask, Response, abort, jsonify, request
 
 import config_grabber
+import tkn
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -213,16 +215,30 @@ td, th {{ text-align:left; padding:0.4rem 0.6rem; border-bottom:1px solid #333; 
 </html>"""
 
 
+def _is_authorized(req):
+    """Constant-time check of a bearer token against WEBHOOK_TOKEN. Only the
+    trigger endpoint requires this; /runs stays open for browsing history."""
+    auth_header = req.headers.get("Authorization", "")
+    scheme, _, token = auth_header.partition(" ")
+    if scheme != "Bearer" or not token:
+        return False
+    return hmac.compare_digest(token, tkn.get("webhook"))
+
+
 @app.get("/health")
 def health():
     return jsonify(status="ok")
 
 
-@app.get("/")
+@app.post("/")
 def webhook():
-    message = request.args.get("message")
+    if not _is_authorized(request):
+        return jsonify(error="missing or invalid bearer token"), 401
+
+    payload = request.get_json(silent=True) or {}
+    message = payload.get("message")
     if not message:
-        return jsonify(error="missing required 'message' parameter"), 400
+        return jsonify(error="missing required 'message' field"), 400
 
     if not _lock.acquire(blocking=False):
         logger.info("a config grab is already running")

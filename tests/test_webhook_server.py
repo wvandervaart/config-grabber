@@ -7,6 +7,8 @@ import pytest
 
 import webhook_server as ws
 
+AUTH_HEADERS = {"Authorization": "Bearer test-token"}
+
 
 class ImmediateThread:
     """Stand-in for threading.Thread that runs the target synchronously,
@@ -47,31 +49,69 @@ def isolate_run_history(tmp_path, monkeypatch):
     ws._runs.clear()
 
 
+@pytest.fixture(autouse=True)
+def webhook_token(monkeypatch):
+    monkeypatch.setattr(ws.tkn, "get", lambda target: "test-token" if target == "webhook" else "unused")
+
+
+class TestWebhookAuth:
+    def test_missing_auth_header_returns_401(self, client):
+        response = client.post("/", json={"message": "hello"})
+
+        assert response.status_code == 401
+
+    def test_wrong_token_returns_401(self, client):
+        response = client.post("/", json={"message": "hello"}, headers={"Authorization": "Bearer wrong-token"})
+
+        assert response.status_code == 401
+
+    def test_non_bearer_scheme_returns_401(self, client):
+        response = client.post("/", json={"message": "hello"}, headers={"Authorization": "Basic test-token"})
+
+        assert response.status_code == 401
+
+    def test_invalid_auth_does_not_start_build(self, client):
+        with patch.object(ws, "_run_build") as mock_run_build:
+            client.post("/", json={"message": "hello"})
+
+        mock_run_build.assert_not_called()
+
+    def test_invalid_auth_does_not_acquire_lock(self, client):
+        client.post("/", json={"message": "hello"})
+
+        assert not ws._lock.locked()
+
+
 class TestWebhookMessageValidation:
     def test_missing_message_returns_400(self, client):
-        response = client.get("/")
+        response = client.post("/", json={}, headers=AUTH_HEADERS)
 
         assert response.status_code == 400
-        assert response.get_json() == {"error": "missing required 'message' parameter"}
+        assert response.get_json() == {"error": "missing required 'message' field"}
 
     def test_empty_message_returns_400(self, client):
-        response = client.get("/?message=")
+        response = client.post("/", json={"message": ""}, headers=AUTH_HEADERS)
+
+        assert response.status_code == 400
+
+    def test_no_body_returns_400(self, client):
+        response = client.post("/", headers=AUTH_HEADERS)
 
         assert response.status_code == 400
 
     def test_missing_message_does_not_start_build(self, client):
         with patch.object(ws, "_run_build") as mock_run_build:
-            client.get("/")
+            client.post("/", json={}, headers=AUTH_HEADERS)
 
         mock_run_build.assert_not_called()
 
     def test_missing_message_does_not_acquire_lock(self, client):
-        client.get("/")
+        client.post("/", json={}, headers=AUTH_HEADERS)
 
         assert not ws._lock.locked()
 
     def test_missing_message_leaves_run_history_untouched(self, client):
-        client.get("/")
+        client.post("/", json={}, headers=AUTH_HEADERS)
 
         with ws._runs_lock:
             assert len(ws._runs) == 0
@@ -82,7 +122,7 @@ class TestWebhookValidMessage:
         with patch.object(threading, "Thread", ImmediateThread), \
              patch.object(ws.config_grabber, "build", return_value="ok") as mock_build, \
              patch.object(ws, "_post_to_slack"):
-            response = client.get("/?message=hello")
+            response = client.post("/", json={"message": "hello"}, headers=AUTH_HEADERS)
 
         assert response.status_code == 202
         body = response.get_json()
@@ -93,7 +133,7 @@ class TestWebhookValidMessage:
     def test_second_concurrent_request_is_rejected(self, client):
         ws._lock.acquire()
         try:
-            response = client.get("/?message=hello")
+            response = client.post("/", json={"message": "hello"}, headers=AUTH_HEADERS)
         finally:
             ws._lock.release()
 
@@ -105,7 +145,7 @@ class TestRunHistoryPersistence:
         with patch.object(threading, "Thread", ImmediateThread), \
              patch.object(ws.config_grabber, "build", return_value="ok"), \
              patch.object(ws, "_post_to_slack"):
-            client.get("/?message=hello")
+            client.post("/", json={"message": "hello"}, headers=AUTH_HEADERS)
 
         assert os.path.exists(ws.RUN_HISTORY_PATH)
         with open(ws.RUN_HISTORY_PATH) as f:

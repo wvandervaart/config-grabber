@@ -42,9 +42,9 @@ Run a one-off build from the CLI:
 python main.py <branch-name-message>
 ```
 
-Trigger a running webhook server:
+Trigger a running webhook server (token via `--token` or `WEBHOOK_TOKEN` env):
 ```
-python trigger_webhook.py "commit message" --url http://localhost:8080/
+python trigger_webhook.py "commit message" --url http://localhost:8080/ --token <token>
 ```
 
 Docker (single gunicorn worker — see below):
@@ -63,12 +63,13 @@ docker compose up --build
 6. If the working copy is dirty, commits and pushes the new branch; otherwise reports no changes. `git_main()` always runs in a `finally` to leave the working copy back on `main` regardless of outcome.
 
 **`webhook_server.py`** wraps `build()` for HTTP triggering:
-- `GET /?message=...` — `message` is required (missing/empty returns 400 without touching the build lock or run history). Runs `build()` in a background thread; a single `threading.Lock` serializes builds (a second concurrent request gets 409) because builds share one on-disk git working copy — this is also why the Docker image runs a single gunicorn worker.
+- `POST /` with a JSON body `{"message": "..."}` — requires `Authorization: Bearer <token>` matching `WEBHOOK_TOKEN` (checked via `_is_authorized`, `hmac.compare_digest` against `tkn.get('webhook')`); missing/invalid auth returns 401 before the message is even read. `message` is required (missing/empty returns 400 without touching the build lock or run history). Runs `build()` in a background thread; a single `threading.Lock` serializes builds (a second concurrent request gets 409) because builds share one on-disk git working copy — this is also why the Docker image runs a single gunicorn worker.
+- `/health`, `/runs`, and `/runs/<id>` are deliberately left open (no auth) — they're read-only status views, not the build trigger.
 - Run history (`_runs`, capped at `MAX_RUNS=30`) captures each run's log lines via a custom `logging.Handler` attached for the run's duration; browsable at `/runs` and `/runs/<id>` (HTML, or `?format=json`). Mirrored to disk at `RUN_HISTORY_PATH` (env, default `data/run_history.json`) on run start and finish (`_save_runs`/`_load_runs`) so history survives a container restart — deliberately outside `cfg['GIT']['PATH']` so it's never swept up by that repo's `git add --all`. A run still `"running"` when the file is loaded belonged to a process that no longer exists, so it's relabeled `"interrupted"` rather than shown as perpetually in-progress. `docker-compose.yml` mounts a dedicated `run-history-data` volume at `/app/data` for this.
 - Slack notifications (build started/finished/failed) are best-effort: `_post_to_slack` and each `_notify_slack_*` wrapper swallow all exceptions, since a notification bug must never be mistaken for — or mask — an actual build failure. Only sent if `[SLACK] WEBHOOK_URL` is set in `.config`.
 
-**Secrets vs. config**: `.config` (INI, gitignored) holds non-secret settings (NetBox URL, git URL/path, Slack webhook). Actual credentials (`NB_TOKEN`, `GIT_TOKEN`) and git identity (`GIT_USER_NAME`/`GIT_USER_EMAIL`) come from environment variables — see `.env_example` — read via `tkn.get()`, which exits(1) if a required token is unset. `entrypoint.sh` sets the global git identity from those env vars and installs any mounted CA certs before handing off to gunicorn.
+**Secrets vs. config**: `.config` (INI, gitignored) holds non-secret settings (NetBox URL, git URL/path, Slack webhook). Actual credentials (`NB_TOKEN`, `GIT_TOKEN`, `WEBHOOK_TOKEN`) and git identity (`GIT_USER_NAME`/`GIT_USER_EMAIL`) come from environment variables — see `.env_example` — read via `tkn.get()`, which exits(1) if a required token is unset. `entrypoint.sh` sets the global git identity from those env vars and installs any mounted CA certs before handing off to gunicorn.
 
 ## Tests
 
-`tests/test_config_grabber.py` mocks `git.Repo` and the pynetbox client heavily rather than hitting real services. `tests/test_webhook_server.py` uses Flask's test client and an `ImmediateThread` stand-in (patched over `threading.Thread`) to run the background build synchronously within a test; an autouse fixture releases `webhook_server._lock` before/after each test in case a prior test left it held.
+`tests/test_config_grabber.py` mocks `git.Repo` and the pynetbox client heavily rather than hitting real services. `tests/test_webhook_server.py` uses Flask's test client and an `ImmediateThread` stand-in (patched over `threading.Thread`) to run the background build synchronously within a test; an autouse fixture releases `webhook_server._lock` before/after each test in case a prior test left it held. Another autouse fixture stubs `tkn.get` to return a fixed `WEBHOOK_TOKEN` (`"test-token"`) so tests can hit `POST /` with a real `Authorization: Bearer` header instead of touching the environment.
