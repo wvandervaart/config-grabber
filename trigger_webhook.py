@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+"""CLI client that remotely triggers a running `webhook_server.py` instance
+by POSTing to its `/` endpoint."""
+
 import argparse
 import os
 
@@ -6,6 +9,10 @@ import requests
 
 
 def main():
+    """Parse CLI args and POST `{"message": <message>}` to `<url>` with a
+    bearer-token Authorization header. Exits via `parser.error` (status 2)
+    if no token is available from `--token` or the WEBHOOK_TOKEN env var.
+    Prints the response status code and JSON body."""
     parser = argparse.ArgumentParser(description="Trigger the config-grabber webhook.")
     parser.add_argument("message", nargs="?", default="manual trigger", help="commit/branch message")
     parser.add_argument("--url", default=os.environ.get("WEBHOOK_URL", "http://localhost:8080/"))

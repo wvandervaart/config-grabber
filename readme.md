@@ -24,6 +24,8 @@ python trigger_webhook.py "message" --url http://localhost:8080/ --token <token>
 
 The webhook's trigger endpoint (`POST /`) requires an `Authorization: Bearer <token>` header matching `WEBHOOK_TOKEN`; `trigger_webhook.py` reads the token from `--token` or the `WEBHOOK_TOKEN` env var. `/health` and the `/runs` history pages are not authenticated.
 
+See [`docs/cli.md`](docs/cli.md) for full CLI reference and [`docs/webhook-api.md`](docs/webhook-api.md) for the full HTTP API (endpoints, request/response shapes, run lifecycle).
+
 ## Docker
 
 ```

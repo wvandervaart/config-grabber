@@ -1,3 +1,6 @@
+"""One-off CLI entry point: `python main.py <name>` runs a single
+`config_grabber.build()` pass, using `<name>` as the branch/commit message."""
+
 import logging
 import sys
 

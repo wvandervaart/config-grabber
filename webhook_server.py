@@ -1,3 +1,6 @@
+"""Flask app that wraps `config_grabber.build()` as an HTTP-triggered
+service. See docs/webhook-api.md for the endpoint reference."""
+
 import hmac
 import json
 import logging
@@ -47,6 +50,9 @@ class _RunLogHandler(logging.Handler):
 
 
 def _new_run(message):
+    """Create and register a new run record (status "running"), evicting
+    the oldest run if MAX_RUNS is exceeded. Persists history to disk and
+    returns the new run dict."""
     run = {
         "id": uuid.uuid4().hex[:8],
         "message": message,
@@ -112,8 +118,10 @@ def _slack_escape(text):
 
 
 def _post_to_slack(text):
-    """Best-effort notification; Slack being unreachable/unconfigured must
-    never block or fail an actual build."""
+    """POST `text` to the Slack webhook URL configured at `[SLACK] WEBHOOK_URL`
+    in `.config`, if set; no-op if unconfigured. Best-effort notification;
+    Slack being unreachable/unconfigured must never block or fail an actual
+    build."""
     try:
         cfg = config_grabber.read_config()
         webhook_url = cfg.get("SLACK", "WEBHOOK_URL", fallback="").strip()
@@ -125,9 +133,12 @@ def _post_to_slack(text):
 
 
 def _notify_slack_build_started(message, run_id, log_url):
-    # Each notify function must never raise: it runs inline with build-status
-    # tracking in _run_build, and a bug here must not get mistaken for the
-    # build itself failing (or mask a real failure).
+    """Notify Slack that a build has started, linking to its run page.
+
+    Each notify function must never raise: it runs inline with build-status
+    tracking in _run_build, and a bug here must not get mistaken for the
+    build itself failing (or mask a real failure).
+    """
     try:
         _post_to_slack(f":gear: Config build started — *{_slack_escape(message)}*\n<{log_url}|View run {run_id}>")
     except Exception:
@@ -135,6 +146,7 @@ def _notify_slack_build_started(message, run_id, log_url):
 
 
 def _notify_slack_build_finished(message, run_id, log_url, result):
+    """Notify Slack that a build finished successfully, with its result summary."""
     try:
         _post_to_slack(
             f":white_check_mark: Config build finished — *{_slack_escape(message)}*\n"
@@ -145,6 +157,7 @@ def _notify_slack_build_finished(message, run_id, log_url, result):
 
 
 def _notify_slack_build_failed(message, run_id, log_url, error):
+    """Notify Slack that a build raised an exception, with the error message."""
     try:
         _post_to_slack(
             f":x: Config build failed — *{_slack_escape(message)}*\n"
@@ -155,6 +168,10 @@ def _notify_slack_build_failed(message, run_id, log_url, error):
 
 
 def _run_build(run, message, log_url):
+    """Run `config_grabber.build(message)` to completion, updating `run` in
+    place with status/result/timing, capturing its log output into
+    `run["lines"]`, sending Slack notifications, and releasing `_lock` when
+    done. Runs on a background thread started by the `webhook()` route."""
     cg_logger = logging.getLogger("config_grabber")
     handler = _RunLogHandler(run)
     cg_logger.addHandler(handler)
@@ -185,6 +202,8 @@ def _run_build(run, message, log_url):
 
 
 def _run_summary(run):
+    """Return the subset of `run` shown in the /runs list view (omits the
+    log lines and result body)."""
     return {
         "id": run["id"],
         "message": run["message"],
@@ -196,6 +215,7 @@ def _run_summary(run):
 
 
 def _format_duration(duration_seconds):
+    """Render a duration in seconds as "12.3s", or "-" if not yet known."""
     return f"{duration_seconds:.1f}s" if duration_seconds is not None else "-"
 
 
@@ -205,6 +225,8 @@ _load_runs()
 
 
 def _page(title, body):
+    """Wrap `body` HTML in the shared dark-themed page layout used by /runs
+    and /runs/<id>."""
     return f"""<!doctype html>
 <html>
 <head>
@@ -239,11 +261,18 @@ def _is_authorized(req):
 
 @app.get("/health")
 def health():
+    """Unauthenticated liveness check. Returns `{"status": "ok"}`."""
     return jsonify(status="ok")
 
 
 @app.post("/")
 def webhook():
+    """Trigger a build. Requires `Authorization: Bearer <WEBHOOK_TOKEN>` and
+    a JSON body `{"message": "..."}`. Starts the build on a background
+    thread and returns immediately: 202 with the new run's id/log_url on
+    success, 401 if unauthorized, 400 if `message` is missing/empty, or 409
+    if a build is already running (builds are serialized by `_lock` since
+    they share one on-disk git working copy)."""
     if not _is_authorized(request):
         return jsonify(error="missing or invalid bearer token"), 401
 
@@ -264,6 +293,9 @@ def webhook():
 
 @app.get("/runs")
 def list_runs():
+    """Unauthenticated. List recent runs (newest first, up to MAX_RUNS), as
+    an HTML table or, with `?format=json`, `{"runs": [...]}` of run
+    summaries (see `_run_summary`)."""
     with _runs_lock:
         runs = [_run_summary(r) for r in reversed(_runs.values())]
 
@@ -291,6 +323,10 @@ def list_runs():
 
 @app.get("/runs/<run_id>")
 def view_run(run_id):
+    """Unauthenticated. Show a single run's full detail, including its log
+    transcript, as HTML (auto-refreshing every 2s while `status` is
+    "running") or, with `?format=json`, the full run record. 404 if
+    `run_id` is unknown."""
     with _runs_lock:
         run = _runs.get(run_id)
         if run is None:

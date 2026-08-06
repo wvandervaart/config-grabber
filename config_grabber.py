@@ -1,3 +1,8 @@
+"""Core build pipeline: fetch tagged device configs from NetBox and push them
+to a branch in a separate device-config git repo. `build()` is the single
+entry point used by both `main.py` (one-off CLI) and `webhook_server.py`
+(HTTP-triggered service)."""
+
 import asyncio
 import configparser
 import logging
@@ -32,6 +37,9 @@ FETCH_MAX_WORKERS = 14
 REQUEST_TIMEOUT = 60
 
 class TimeoutHTTPAdapter(requests.adapters.HTTPAdapter):
+    """HTTPAdapter that applies a default request timeout when the caller
+    (pynetbox) doesn't set one of its own."""
+
     def __init__(self, *args, timeout=REQUEST_TIMEOUT, **kwargs):
         self.timeout = timeout
         super().__init__(*args, **kwargs)
@@ -42,6 +50,8 @@ class TimeoutHTTPAdapter(requests.adapters.HTTPAdapter):
         return super().send(request, **kwargs)
 
 def read_config():
+    """Load `.config` (INI, see `.config_example`) from the current working
+    directory. Raises FileNotFoundError if it's missing."""
     if not os.path.exists('.config'):
         raise FileNotFoundError(
             "Config file '.config' not found. See .config_example for the required format."
@@ -51,6 +61,9 @@ def read_config():
     return config
 
 def connect(cfg):
+    """Open a pynetbox API session for `cfg['NETBOX']['URL']`, authenticated
+    with the NB_TOKEN env var (via `tkn.get('nb')`) and using
+    `TimeoutHTTPAdapter` for both http:// and https://."""
     url = cfg.get('NETBOX', 'URL')
     nb = pynetbox.api(url, tkn.get('nb'))
     adapter = TimeoutHTTPAdapter(pool_maxsize=POOL_MAXSIZE)
@@ -72,6 +85,9 @@ async def grab_config(device, path, executor=None):
     return await loop.run_in_executor(executor, _write)
 
 async def _fetch_all(devices, path):
+    """Fetch and write configs for all `devices` concurrently, bounded by
+    FETCH_MAX_WORKERS. Returns a list of `grab_config` results/exceptions,
+    positionally aligned with `devices`."""
     with ThreadPoolExecutor(max_workers=FETCH_MAX_WORKERS) as executor:
         tasks = [grab_config(device, path, executor) for device in devices]
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -92,6 +108,12 @@ def _prune_stale_configs(path, devices):
             logger.info("Removed stale config: %s", entry)
 
 def get_device_configs(cfg, nb, t, f):
+    """Fetch and write configs for NetBox devices tagged with
+    `cfg['NETBOX']['TAGNAME']`, filtered by `t` ("role", "device", or "all")
+    with `f` as the filter value (role name, device name, or ignored for
+    "all"). When `t` is "all", also prunes `.set` files for devices no
+    longer in the tagged inventory. Returns a list of device names whose
+    fetch failed."""
     path = os.path.join(cfg.get('GIT', 'PATH'), 'configs')
     if t == "role":
         devices = nb.dcim.devices.filter(role=f, tag=cfg.get('NETBOX', 'TAGNAME'))
@@ -115,6 +137,7 @@ def get_device_configs(cfg, nb, t, f):
     return failures
 
 def is_git_repo(path):
+    """Return True if `path` is the root of an existing git working copy."""
     try:
         _ = git.Repo(path).git_dir
         return True
@@ -122,6 +145,10 @@ def is_git_repo(path):
         return False
 
 def git_clone(cfg):
+    """Clone the device-config repo (`cfg['GIT']['URL']`, authenticated with
+    GIT_TOKEN via `tkn.get('git')`) into `cfg['GIT']['PATH']` if not already
+    present there, otherwise reset the existing working copy to `main` and
+    pull. Returns the `git.Repo`."""
     path = cfg.get('GIT', 'PATH')
     urlprefix = cfg.get('GIT', 'URLPREFIX')
     url = cfg.get('GIT', 'URL')
@@ -139,16 +166,20 @@ def git_clone(cfg):
     return repo
 
 def git_branch(repo, name):
+    """Create and check out a new branch `name` from the current HEAD."""
     repo.git.checkout("HEAD", b=name)
 
 def git_main(repo):
+    """Check out `main`."""
     repo.git.checkout("main")
 
 def git_add(repo, msg):
+    """Stage all changes (including untracked files) and commit with `msg`."""
     repo.git.add(all=True)
     repo.index.commit(msg)
 
 def git_push(repo, branch_name):
+    """Push `branch_name` to origin, setting it as the upstream tracking branch."""
     repo.git.push('origin', '-u', branch_name)
 
 def sanitize_branch_component(value):
@@ -159,6 +190,18 @@ def sanitize_branch_component(value):
     return value or "webhook"
 
 def build(message):
+    """Run one full build: fetch all NetBox-tagged device configs into a new
+    branch of the device-config repo, and push it if anything changed.
+
+    `message` becomes both the branch name (sanitized, with a timestamp
+    suffix so concurrent builds can't collide) and the commit message
+    (with a timestamp appended). The working copy is always left back on
+    `main` before returning, even if a step above raises.
+
+    Returns a human-readable summary string: "Pushed with message: ..." or
+    "No changes found, no push needed.", with a " (N device(s) failed: ...)"
+    suffix appended if any device config fetch failed.
+    """
     t = "all"
     f = "all"
     m = message
