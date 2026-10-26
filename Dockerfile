@@ -1,13 +1,21 @@
-FROM python:3.11-slim
+FROM python:3.11-alpine
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends git ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+# Alpine base: far fewer (and faster-patched) OS-level CVEs than Debian slim.
+# `apk upgrade` pulls in any security fixes published since the base image was built.
+RUN apk upgrade --no-cache \
+    && apk add --no-cache git ca-certificates
 
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# pip/setuptools/wheel are only needed to install deps, and they vendor their own
+# (often outdated) copies of urllib3, msgpack, etc. that scanners flag. Remove them,
+# along with ensurepip's bundled wheels, so the runtime image ships only what the app uses.
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt \
+    && pip uninstall -y setuptools wheel \
+    && python -m pip uninstall -y pip \
+    && rm -rf /usr/local/lib/python3.11/ensurepip/_bundled
 
 COPY config_grabber.py tkn.py webhook_server.py entrypoint.sh ./
 RUN chmod +x entrypoint.sh
